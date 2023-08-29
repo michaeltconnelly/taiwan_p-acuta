@@ -1,0 +1,103 @@
+---
+title: "ITS2_analyses"
+author: "Mike Connelly"
+date: "2023-08-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = rprojroot::find_rstudio_root_file())
+```
+```{r}
+library("tidyverse")
+library("magrittr")
+library("forcats")
+library("patchwork")
+```
+```{r}
+theme_set(theme_bw())
+```
+
+## Sample metadata
+```{r}
+sample_metadata <- read_csv("./ITS2_analyses/input/SymPortal_datasheet_McRae2023.csv")
+sample_metadata$sample_uid <- factor(c(167205:167228))
+
+```
+
+## ITS2 sequences
+```{r}
+#read_tsv("./ITS2_analyses/input/396_20230721T100004_DBV_20230721T215339.seqs.relative.abund_only.txt")
+sequences <- read_tsv("./ITS2_analyses/input/396_20230721T100004_DBV_20230721T215339.seqs.relative.abund_only.txt") %>% pivot_longer(cols = `C1d`:last_col(), names_to = "seq", values_to = "value", names_transform = list("seq" = forcats::fct_inorder))
+#
+sequence_names <- unique(sequences$seq)
+sequences$sample_uid <- as.factor(sequences$sample_uid)
+#
+sequences %<>% left_join(., sample_metadata, by = "sample_uid")
+```
+```{r}
+seq_plot <- sequences %>%
+  ggplot(aes(sample_name, value)) + 
+  geom_col(aes(fill = seq)) +
+  ylab("ITS2 sequences") +
+  theme(legend.title = element_blank(),
+        legend.key.size = unit(2, 'mm'),
+        legend.text = element_text(size = 6),
+        legend.position = "right",
+        axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        panel.grid = element_blank())
+```
+```{r}
+print(seq_plot)
+```
+
+## ITS2 type profiles
+```{r}
+profiles_metadata <- read_tsv("./ITS2_analyses/input/396_20230721T100004_DBV_20230721T215339.profiles.meta_only.txt", col_types = c(rep("c",4), "i", "i", rep("c",4))) %>%  mutate("profile" = forcats::fct_inorder(`ITS2 type profile UID`))
+#
+profiles <- read_tsv("./ITS2_analyses/input/396_20230721T100004_DBV_20230721T215339.profiles.relative.abund_only.txt") %>% pivot_longer(cols = `394576`:`396628`, names_to = "profile", values_to = "value", names_transform = list("profile" = forcats::fct_inorder)) 
+#
+profiles$sample_uid <- as.factor(profiles$sample_uid)
+#
+profiles %<>% left_join(., sample_metadata, by = "sample_uid") %>% left_join(., profiles_metadata, by = "profile")
+#
+profiles$`ITS2 type profile` <- factor(profiles$`ITS2 type profile`, levels = profiles_metadata$`ITS2 type profile`)
+
+profiles$sample_uid
+profiles$profile
+unique(profiles$`ITS2 type profile UID`)
+profiles$`ITS2 type profile`
+```
+```{r}
+prof_plot <- profiles %>% 
+  ggplot(aes(sample_name, value)) + 
+  geom_col(aes(fill = `ITS2 type profile`)) + 
+  ylab("ITS2 type profiles") +
+  theme(legend.title = element_blank(),
+        legend.text = element_text(size = 6),
+        legend.key.size = unit(4, 'mm'),
+        legend.position = "right",
+        axis.title.x = element_blank(),
+        axis.text.x = element_text(angle = 315, size = 8),
+        panel.grid = element_blank())
+```
+```{r}
+print(prof_plot)
+```
+
+## Combine into final figure
+note: I want to add the ITS2 type profile names to the legend - Done!
+and maybe mess with the colors, but the default is really good!
+maybe alter plot layout, drop sample names from top plot - Done!
+
+```{r}
+pdf("./ITS2_analyses/ITS2_figure.pdf", height = 4.5, width = 6.5)
+title <- expression(paste("Southern Taiwan ", italic("Pocillopora acuta"), " Symbiodiniaceae communities"))
+(seq_plot / plot_spacer() /  prof_plot ) + plot_layout(heights = c(4.5, -0.625, 4.5)) + plot_annotation(title = title)
+dev.off()
+```
+
+
